@@ -14,9 +14,10 @@ import json
 # получаем токены от VK и Яндекс
 with open('files/t.txt') as f:
     token = f.readline().strip()
-    token_yandex = f.readline().strip()
 V = '5.131'
 numbers = 5  # количество фотографий для скачивания
+
+owner_id = ''  # id по умолчанию
 
 #  Работа с аккаунтом VK
 class VKUser:
@@ -40,8 +41,9 @@ class VKUser:
         req = requests.get(photo_url, params={**self.params, **photo_params}).json()
         return req
 
-    def photo_info(self):
-        req = self.get_photos()
+    def photo_info(self, owner_id=None):
+        self.owner_id = owner_id
+        req = self.get_photos(owner_id)
         # Получение данных о фотографиях
         photos_all_list = req.get('response').get('items')
         # all_my_photo словарь id: прочая информаци по нему
@@ -99,6 +101,7 @@ class YaUploader:
     def upload(self, file_in, file_out):
         self.file_in = file_in
         self.file_out = file_out
+
         #  Получаем ссылку для загрузки файла на Яндекс диск в папку Netology/Photo_VK
         req = requests.post(self.APT_BASE_URL + 'v1/disk/resources/upload', headers=self.headers, params={'path': self.file_out, 'url': self.file_in})
         if req.status_code == 202:
@@ -109,18 +112,30 @@ class YaUploader:
             success = False
         return success
 
+    def create_folder(self):
+        req = requests.put(self.APT_BASE_URL + 'v1/disk/resources?path=Netology/Photo_VK', headers=self.headers)
+
+#  Запрашиваем у пользователя ID VK. Если не введет- то по умолчанию свой ID
+owner_id = input('Введите ID аккаунта VK: ')
+if not owner_id:
+    owner_id = '416852531'
+
+#  Запрашиваем у пользователя токен Яндекс
+token_yandex = input('Введите токен Яндекс Диска: ')
+
 #  Создаем экземпляр класса
 vk_client = VKUser(token, V)
-#  Получаем список картинок
-#pprint(vk_client.get_photos())
 
 #  Работаем с Яндекс
 OAuth = token_yandex
 uploader = YaUploader(OAuth)
-#file_out = 'Netology/Photo_VK'
+file_out = 'Netology/Photo_VK'
 log = []
 
-for i in list(vk_client.photo_info().values()):
+# Создать папку на Яндекс
+uploader.create_folder()
+
+for i in list(vk_client.photo_info(owner_id).values()):
     log_dict = {}
     size = i['type']
     file_in = i['url_max']  # Полученные ссылки на фотографии
