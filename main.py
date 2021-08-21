@@ -7,30 +7,30 @@ Netology
 '''
 
 import requests
-from pprint import pprint
+#  from pprint import pprint
 import operator
 import json
+from datetime import datetime
 
-# получаем токены от VK и Яндекс
-with open('files/t.txt') as f:
-    token = f.readline().strip()
-V = '5.131'
-numbers = 5  # количество фотографий для скачивания
-
-owner_id = ''  # id по умолчанию
 
 #  Работа с аккаунтом VK
 class VKUser:
     url = 'https://api.vk.com/method/'
     #  Авторизация на VK
-    def __init__(self, token, version):
+
+    def __init__(self):
+        # получаем токены от VK
+        self.token = ''
+        while self.token == '':
+            self.token = input('Введите токен VK: ').strip()
+        self.V = '5.131'
         self.params = {
-            'access_token': token,
-            'v': version
+            'access_token': self.token,
+            'v': self.V
         }
 
 #  Функция получения списка фотографий с профиля
-    def get_photos(self, owner_id=None):
+    def get_photos(self, numbers, owner_id=None):
         photo_url = self.url + 'photos.get'
         photo_params = {
             'owner_id': owner_id,
@@ -41,11 +41,17 @@ class VKUser:
         req = requests.get(photo_url, params={**self.params, **photo_params}).json()
         return req
 
+    #  Обработка данных с аккаунта VK
     def photo_info(self, owner_id=None):
         self.owner_id = owner_id
-        req = self.get_photos(owner_id)
+        self.numbers = self.ask_nombers()
+        req = self.get_photos(self.numbers, owner_id)
         # Получение данных о фотографиях
-        photos_all_list = req.get('response').get('items')
+        try:
+            photos_all_list = req.get('response').get('items')
+        except Exception as error:
+            print('Убедитесь в верном токене. ')
+            return 'Убедитесь в верном токене VK. {error}'
         # all_my_photo словарь id: прочая информаци по нему
         all_my_photo = {}
         for i in photos_all_list:
@@ -89,21 +95,38 @@ class VKUser:
         with open('files/log.json', 'w') as f_log:
             json.dump(to_json, f_log, indent=1)
 
+    #  Запрашиваем число фотографий для скачивания. Ограничение - 20, по умолчанию 5.
+    def ask_nombers(self):
+        numbers = input('Введите число фотографий для скачивания до 20, по умолчанию - 5: ')
+        if numbers == '':
+            numbers = 5
+        else:
+            while not numbers.isdigit() or int(numbers) <= 0 or int(numbers) > 20:
+                numbers = input('Введите число фотографий для скачивания до 20, по умолчанию - 5: ')
+            numbers = int(numbers)
+        return numbers
+
 
 #  Работа с аккаунтом Яндекс
 class YaUploader:
     #  Авторизация на Яндексе
-    def __init__(self, token_y: str):
-        self.token_y = token_y
+    OAuth = input('Введите токен Яндекс Диска: ')
+
+    def __init__(self):
         self.APT_BASE_URL = 'https://cloud-api.yandex.net/'
-        self.headers = {'Authorization': OAuth}
+        self.headers = {'Authorization': self.OAuth}
 
     def upload(self, file_in, file_out):
         self.file_in = file_in
         self.file_out = file_out
 
-        #  Получаем ссылку для загрузки файла на Яндекс диск в папку Netology/Photo_VK
-        req = requests.post(self.APT_BASE_URL + 'v1/disk/resources/upload', headers=self.headers, params={'path': self.file_out, 'url': self.file_in})
+        #  Получаем ссылку для загрузки файла на Яндекс диск в папку пользователя
+        try:
+            req = requests.post(self.APT_BASE_URL + 'v1/disk/resources/upload', headers=self.headers, params={'path': self.file_out, 'url': self.file_in})
+        except Exception as error:
+            print('Убедитесь в правильности токена Yandex. ')
+            return 'Убедитесь в правильности токена Yandex. {error}'
+
         if req.status_code == 202:
             print('##', end='')
             success = True
@@ -112,43 +135,54 @@ class YaUploader:
             success = False
         return success
 
-    def create_folder(self):
-        req = requests.put(self.APT_BASE_URL + 'v1/disk/resources?path=Netology/Photo_VK', headers=self.headers)
+    # Создать папку на Яндекс
+    def create_folder(self, folder_name):
+        self.folder_name = folder_name
+        req = requests.put(self.APT_BASE_URL + 'v1/disk/resources?path=' + self.folder_name, headers=self.headers)
 
-#  Запрашиваем у пользователя ID VK. Если не введет- то по умолчанию свой ID
-owner_id = input('Введите ID аккаунта VK: ')
-if not owner_id:
-    owner_id = '416852531'
 
-#  Запрашиваем у пользователя токен Яндекс
-token_yandex = input('Введите токен Яндекс Диска: ')
+def run_copy():
+    count = 0
+    #  Запрашиваем у пользователя ID VK и имя папки для загрузки на Яндекс.
+    folder_name = ''
+    owner_id = ''
+    while folder_name == '':
+        folder_name = input('Введите название папки для сохранения фотографий на Яндекс-Диске: ')
+    while owner_id == '':
+        owner_id = input('Введите ID аккаунта VK: ')
+    log = []
 
-#  Создаем экземпляр класса
-vk_client = VKUser(token, V)
+    # Создать папку на Яндекс
+    uploader.create_folder(folder_name)
 
-#  Работаем с Яндекс
-OAuth = token_yandex
-uploader = YaUploader(OAuth)
-file_out = 'Netology/Photo_VK'
-log = []
+    try:
+        for i in list(vk_client.photo_info(owner_id).values()):  # Получаем необходимые данные с VK
+            count += 1
+            log_dict = {}
+            size = i['type']
+            file_in = i['url_max']  # Полученные ссылки на фотографии
+            date_photo = datetime.fromtimestamp(i['date_photo']).strftime("%d_%b_%Y_%I_%M_%S")
+            file_out = folder_name + '/' + str(date_photo) + '.jpeg'
+            #  Отправляем фотографии на Яндекс
+            result = uploader.upload(file_in, file_out)
+            #  Готовим иноформацию для записи в лог
+            log_dict['file_name'] = str(date_photo) + '.jpeg'
+            log_dict['size'] = size
+            log.append(log_dict)
+    except Exception as error:
+        return 'Убедитесь в верном токене. {error}'
 
-# Создать папку на Яндекс
-uploader.create_folder()
+    print()
+    vk_client.write_log(log)
+    if result:
+        print(f'{count} фотографий с аккаунта VK успешно загружено на аккаунт Яндекс в папку {folder_name}')
 
-for i in list(vk_client.photo_info(owner_id).values()):
-    log_dict = {}
-    size = i['type']
-    file_in = i['url_max']  # Полученные ссылки на фотографии
-    date_photo = i['date_photo']
-    file_out = 'Netology/Photo_VK/' + str(date_photo) + '.jpeg'
-    #  Отправляем фотографии на Яндекс
-    result = uploader.upload(file_in, file_out)
-    #  Готовим иноформацию для записи в лог
-    log_dict['file_name'] = str(date_photo) + '.jpeg'
-    log_dict['size'] = size
-    log.append(log_dict)
 
-print()
-vk_client.write_log(log)
-if result:
-    print(f'{numbers} фотографий с аккаунта VK успешно загружено на аккаунт Яндекс')
+if __name__ == "__main__":
+    #  Создаем экземпляр класса VKUser()
+    vk_client = VKUser()
+
+    #  Создаем экземпляр класса YaUploader()
+    uploader = YaUploader()
+
+    run_copy()
