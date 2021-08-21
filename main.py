@@ -7,7 +7,7 @@ Netology
 '''
 
 import requests
-#  from pprint import pprint
+from pprint import pprint
 import operator
 import json
 from datetime import datetime
@@ -36,7 +36,8 @@ class VKUser:
             'owner_id': owner_id,
             'count': numbers,
             'album_id': 'profile',
-            'photo_size': 1
+            'photo_size': 1,
+            'extended': 1  # расширренное чтобы отобразились лайки
         }
         req = requests.get(photo_url, params={**self.params, **photo_params}).json()
         return req
@@ -64,6 +65,7 @@ class VKUser:
             date_photo = i.get('date')
             photo_info['date_photo'] = date_photo
             sizes = i.get('sizes')
+            likes = i.get('likes').get('count')
             for j in sizes:
                 height = j.get('height')
                 width = j.get('width')
@@ -86,6 +88,7 @@ class VKUser:
             photo_info['resolution_max'] = resolution_max
             photo_info['url_max'] = url_max
             photo_info['type'] = size_max
+            photo_info['likes'] = likes
 
             all_my_photo[id_photo] = photo_info
         return all_my_photo
@@ -154,19 +157,26 @@ def run_copy():
 
     # Создать папку на Яндекс
     uploader.create_folder(folder_name)
-
+    likes_list = []
     try:
         for i in list(vk_client.photo_info(owner_id).values()):  # Получаем необходимые данные с VK
             count += 1
             log_dict = {}
+            likes = i['likes']
             size = i['type']
             file_in = i['url_max']  # Полученные ссылки на фотографии
             date_photo = datetime.fromtimestamp(i['date_photo']).strftime("%d_%b_%Y_%I_%M_%S")
-            file_out = folder_name + '/' + str(date_photo) + '.jpeg'
+            #  Даем имя файлу по числу лайков. Если одинаково - то по дате.
+            if likes not in likes_list:
+                likes_list.append(likes)
+                file_name = str(likes)
+            else:
+                file_name = str(date_photo)
+            file_out = folder_name + '/' + file_name + '.jpeg'
             #  Отправляем фотографии на Яндекс
             result = uploader.upload(file_in, file_out)
             #  Готовим иноформацию для записи в лог
-            log_dict['file_name'] = str(date_photo) + '.jpeg'
+            log_dict['file_name'] = file_name + '.jpeg'
             log_dict['size'] = size
             log.append(log_dict)
     except Exception as error:
@@ -181,7 +191,7 @@ def run_copy():
 if __name__ == "__main__":
     #  Создаем экземпляр класса VKUser()
     vk_client = VKUser()
-
+    #pprint(vk_client.get_photos(5))
     #  Создаем экземпляр класса YaUploader()
     uploader = YaUploader()
 
