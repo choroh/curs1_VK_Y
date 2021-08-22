@@ -29,30 +29,58 @@ class VKUser:
             'v': self.V
         }
 
-#  Функция получения списка фотографий с профиля
+#  Функция получения списка фотографий с профиля, метод photos.get
     def get_photos(self, numbers, owner_id=None):
-        photo_url = self.url + 'photos.get'
-        photo_params = {
+        self.photo_url = self.url + 'photos.get'
+        self.numbers = numbers
+        self.owner_id = owner_id
+        self.photo_params = {
             'owner_id': owner_id,
             'count': numbers,
             'album_id': 'profile',
             'photo_size': 1,
             'extended': 1  # расширренное чтобы отобразились лайки
         }
-        req = requests.get(photo_url, params={**self.params, **photo_params}).json()
+        req = requests.get(self.photo_url, params={**self.params, **self.photo_params}).json()
         return req
 
-    #  Обработка данных с аккаунта VK
+#  Функция получения данных по логину, метод users.get
+    def user_get(self, user_ids):
+        user_url = self.url + 'users.get'
+        self.user_ids = user_ids
+        self.user_params = {
+            'user_ids': self.user_ids,
+            'fields': 'id'
+        }
+        try:
+            req = requests.get(user_url, params={**self.params, **self.user_params}).json()
+        except Exception as error:
+            print('Убедитесь в верном токене логине. ')
+            return 'Убедитесь в верном токене логине. {error}'
+        if 'error' in req:
+            print('Неверный логин')
+        return req.get('response')[0].get('id')
+
+
+        #  Обработка данных с аккаунта VK
     def photo_info(self, owner_id=None):
         self.owner_id = owner_id
         self.numbers = self.ask_nombers()
-        req = self.get_photos(self.numbers, owner_id)
+        #  Если ввели id получаем данные по нему
+        if str(self.owner_id).isdigit():
+            req = self.get_photos(self.numbers, owner_id)
+        #  Если ввели логин
+        else:
+            #  Определяем id по логину
+            self.user_id = self.user_get(self.owner_id)
+            #  и получаем данные по по id
+            req = self.get_photos(self.numbers, self.user_id)
         # Получение данных о фотографиях
         try:
             photos_all_list = req.get('response').get('items')
         except Exception as error:
-            print('Убедитесь в верном токене. ')
-            return 'Убедитесь в верном токене VK. {error}'
+            print('Убедитесь в верном токене vk и id. ')
+            return 'Убедитесь в верном токене VK и id. {error}'
         # all_my_photo словарь id: прочая информаци по нему
         all_my_photo = {}
         for i in photos_all_list:
@@ -149,6 +177,7 @@ def run_copy():
     #  Запрашиваем у пользователя ID VK и имя папки для загрузки на Яндекс.
     folder_name = ''
     owner_id = ''
+    result = False
     while folder_name == '':
         folder_name = input('Введите название папки для сохранения фотографий на Яндекс-Диске: ')
     while owner_id == '':
@@ -186,6 +215,8 @@ def run_copy():
     vk_client.write_log(log)
     if result:
         print(f'{count} фотографий с аккаунта VK успешно загружено на аккаунт Яндекс в папку {folder_name}')
+    else:
+        print('Произошла ошибка. Убедитесь в веном id')
 
 
 if __name__ == "__main__":
